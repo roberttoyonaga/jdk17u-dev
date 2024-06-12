@@ -224,4 +224,69 @@ TEST_VM(CommittedVirtualMemoryTracker, test_committed_virtualmemory_region) {
 
 }
 
+TEST_VM(CommittedVirtualMemory, test_full_committed_in_range){
+  bool   result;
+  size_t committed_size;
+  address committed_start;
+  size_t index;
+
+  const size_t page_sz = os::vm_page_size();
+  const size_t num_pages = 1024;
+  const size_t size = num_pages * page_sz;
+  char* base = os::reserve_memory(size, !ExecMem, mtTest);
+  ASSERT_NE(base, (char*)nullptr);
+  result = os::commit_memory(base, size, !ExecMem);
+
+  ASSERT_TRUE(result);
+
+  result = os::committed_in_range((address)base, size, committed_start, committed_size);
+  ASSERT_FALSE(result);
+
+  // Touch all pages
+  for (index = 0; index < num_pages; index ++) {
+  *(base + index * page_sz) = 'a';
+  }
+
+  result = os::committed_in_range((address)base, size, committed_start, committed_size);
+  ASSERT_TRUE(result);
+  ASSERT_EQ(num_pages * page_sz, committed_size);
+  ASSERT_EQ(committed_start, (address)base);
+
+  os::uncommit_memory(base, size, false);
+
+  result = os::committed_in_range((address)base, size, committed_start, committed_size);
+  ASSERT_FALSE(result);
+}
+
+TEST_VM(CommittedVirtualMemory, test_partial_committed_in_range){
+  bool   result;
+  size_t committed_size;
+  address committed_start;
+
+  const size_t page_sz = os::vm_page_size();
+  const size_t num_pages = 2;
+  const size_t size = num_pages * page_sz;
+  char* base = os::reserve_memory(size, !ExecMem, mtTest);
+  ASSERT_NE(base, (char*)nullptr);
+  result = os::commit_memory(base, size, !ExecMem);
+
+  ASSERT_TRUE(result);
+
+  // Test whole range
+  result = os::committed_in_range((address)base, size, committed_start, committed_size);
+  ASSERT_FALSE(result);
+
+
+  // touch first page
+  *base = 'a';
+
+  // Test whole range
+  result = os::committed_in_range((address)base, size, committed_start, committed_size);
+  ASSERT_TRUE(result);
+  ASSERT_EQ(page_sz, committed_size); // Only one page touched
+  ASSERT_EQ(committed_start, (address)base);
+
+  os::release_memory(base, size);
+}
+
 #endif // INCLUDE_NMT
